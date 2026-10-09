@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#14213D">
+<title>TeamPulse</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{--bg:#F1F5FB;--card:#fff;--ink:#14213D;--mut:#5C6B88;--acc:#FFB703;--ok:#1F9D8B;--bad:#E63946;--line:#DCE3F0}
+@media(prefers-color-scheme:dark){:root{--bg:#0E1626;--card:#18233A;--ink:#EEF2FA;--mut:#9AA8C4;--line:#2A3858}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Baloo 2",system-ui,sans-serif;font-size:18px;line-height:1.35;padding-top:env(safe-area-inset-top,0px)}
+#app{max-width:480px;margin:0 auto;padding:12px 14px 96px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.card{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:14px;margin-bottom:12px}
+h1{font-size:26px;margin:0;font-weight:800}h2{font-size:20px;margin:0 0 8px}
+.mut{color:var(--mut);font-size:15px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:block;width:100%;text-align:center;border:0;border-radius:16px;padding:13px;font:inherit;font-weight:700;font-size:19px;cursor:pointer;background:var(--ok);color:#fff;margin-top:8px}
+.btn.sec{background:var(--card);color:var(--ink);border:2px solid var(--line)}.btn.red{background:var(--bad)}.btn.sm{display:inline-block;width:auto;padding:5px 12px;font-size:16px;margin:0 2px}
+.big{border:0;border-radius:22px;padding:16px 6px;font:inherit;font-weight:700;font-size:18px;color:#14213D;cursor:pointer;min-height:92px}.big span{display:block;font-size:32px}
+.bar{height:14px;background:var(--line);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed var(--line)}.row:last-child{border:0}
+.hero{background:var(--ink);color:#fff;border-color:var(--ink)}.hero .mut{color:#b9c4dc}
+.nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:2px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.nav div{display:flex;max-width:480px;margin:0 auto}.nav button{flex:1;border:0;background:none;color:var(--mut);font:inherit;font-size:13px;padding:8px 0;cursor:pointer}
+.nav button.on{color:var(--ink);font-weight:800}.nav b{display:block;font-size:22px}
+.tag{border-radius:9px;padding:1px 9px;font-size:14px;font-weight:700;background:#FFE9A8;color:#6B4B00}
+input,select,textarea{width:100%;font:inherit;font-size:17px;padding:10px;border-radius:12px;border:2px solid var(--line);background:var(--bg);color:var(--ink);margin-top:6px}
+img.p{width:100%;border-radius:12px;margin-top:6px}
+#toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translate(-50%,-150%);background:var(--acc);color:#14213D;font-weight:800;padding:12px 20px;border-radius:16px;transition:transform .3s;z-index:9;max-width:90%;text-align:center}#toast.s{transform:translate(-50%,0)}
+</style></head><body><div id="toast"></div><div id="app">Loading…</div>
+<script>
+// ====== YOUR PROJECT SETTINGS ======
+const URL_="https://myrnukvqfckqwupxffdc.supabase.co";
+const KEY_="sb_publishable_oQ2_5hldMy9mvOBdm6oM3Q_HTlzBxXQ";
+// ===================================
+const sb=supabase.createClient(URL_,KEY_);
+let me=null,tab="home",st={};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const today=()=>new Date().toLocaleDateString("en-CA");
+const ok=r=>{if(r.error)throw r.error;return r.data};
+const bar=v=>`<div class="bar"><i style="width:${Math.min(100,Math.max(0,v))}%"></i></div>`;
+function toast(m){const e=$("#toast");e.textContent=m;e.className="s";setTimeout(()=>e.className="",2600)}
+async function run(f){try{await f()}catch(e){toast(e.message||"Something went wrong")}}
+const admin=()=>me&&(me.role=="owner"||me.role=="manager");
+
+// ---------- LOGIN ----------
+function loginView(signup){
+ $("#app").innerHTML=`<div class="card" style="margin-top:30px"><h1>🤝 TeamPulse</h1><p class="mut">${signup?"New here? Create your account. The owner will approve you.":"Login with your phone number and PIN"}</p>
+ ${signup?'<input id="nm" placeholder="Your name">':""}<input id="ph" type="tel" inputmode="numeric" placeholder="Phone number (10 digits)"><input id="pin" type="password" inputmode="numeric" maxlength="6" placeholder="6-digit PIN">
+ <button class="btn" onclick="auth(${signup})">${signup?"Create account":"Login"}</button>
+ <button class="btn sec" onclick="loginView(${!signup})">${signup?"I already have an account":"New employee? Sign up"}</button></div>`}
+function auth(signup){run(async()=>{
+ const ph=$("#ph").value.replace(/\D/g,"").slice(-10),pin=$("#pin").value,nm=($("#nm")||{}).value||"";
+ if(ph.length!=10||!/^\d{6}$/.test(pin))throw{message:"Phone: 10 digits. PIN: 6 digits."};
+ if(signup&&!nm.trim())throw{message:"Please write your name"};
+ const c={email:ph+"@teampulse.app",password:pin};
+ const r=signup?await sb.auth.signUp({...c,options:{data:{name:nm.trim()}}}):await sb.auth.signInWithPassword(c);
+ if(r.error)throw r.error;boot()})}
+async function logout(){await sb.auth.signOut();me=null;loginView(false)}
+
+async function boot(){
+ const{data:{session}}=await sb.auth.getSession();
+ if(!session)return loginView(false);
+ let r=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle();
+ if(!r.data){await new Promise(t=>setTimeout(t,800));r=await sb.from("profiles").select("*").eq("id",session.user.id).maybeSingle()}
+ me=r.data;if(!me)return loginView(false);
+ if(me.status!="active"){$("#app").innerHTML=`<div class="card" style="margin-top:30px;text-align:center"><div style="font-size:50px">⏳</div><h2>${me.status=="pending"?"Waiting for owner approval":"Account is inactive"}</h2><p class="mut">Hello ${esc(me.name)}. Ask the owner to approve your account, then tap Check again.</p><button class="btn" onclick="boot()">Check again</button><button class="btn sec" onclick="logout()">Logout</button></div>`;return}
+ tab=admin()?"today":"home";const s=ok(await sb.from("settings").select("*"));st={};s.forEach(x=>st[x.key]=x.value);render();live()}
+
+// ---------- SHELL ----------
+let last="",busy=false;
+async function render(silent){
+ if(silent){
+  if(busy)return;
+  const a=document.activeElement;if(a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName))return;
+  if([...document.querySelectorAll("#app input:not([type=file]),#app textarea")].some(i=>i.value!==i.defaultValue))return}
+ busy=true;const t0=tab;
+ try{
+  let v;try{v=await V[tab]()}catch(e){v=`<div class="card">⚠️ ${esc(e.message)}</div>`}
+  if(silent&&tab!=t0)return;
+  const tabs=admin()?[["today","📊","Today"],["staff","👥","Staff"],["assign","📝","Tasks"]]:[["home","🏠","Home"],["tasks","✅","Tasks"],["team","🤝","Team"],["me","📈","My score"]];
+  const html=`<div class="top"><div><div class="mut">${esc(me.role)}</div><b style="font-size:22px">${esc(me.name)}</b></div><button class="btn sec sm" onclick="logout()">Logout</button></div>${v}<div class="nav"><div>${tabs.map(t=>`<button class="${tab==t[0]?"on":""}" onclick="tab='${t[0]}';render()"><b>${t[1]}</b>${t[2]}</button>`).join("")}</div></div>`;
+  const key=html.replace(/src="[^"]*"/g,"");
+  if(silent&&key==last)return;
+  last=key;$("#app").innerHTML=html;
+ }finally{busy=false}}
+
+// ---------- SCORE ----------
+async function score(uid){
+ const m0=new Date();m0.setDate(1);const ms=m0.toLocaleDateString("en-CA");
+ const[t,a,th]=await Promise.all([sb.from("tasks").select("*").eq("assigned_to",uid).limit(300),sb.from("attendance").select("id").eq("user_id",uid).gte("day",ms),sb.from("thanks").select("id").eq("to_user",uid)]);
+ const T=ok(t),done=T.filter(x=>["proof_sent","approved","rejected"].includes(x.status)),ap=T.filter(x=>x.status=="approved").length,rj=T.filter(x=>x.status=="rejected").length;
+ const ontime=done.length?100*done.filter(x=>!x.due_at||x.done_at<=x.due_at).length/done.length:100;
+ const qual=ap+rj?100*ap/(ap+rj):100;
+ let wd=0;for(let d=new Date(m0);d<=new Date();d.setDate(d.getDate()+1))if(d.getDay())wd++;
+ const att=Math.min(100,100*ok(a).length/Math.max(1,wd)),ini=Math.min(100,ok(th).length*20),w=st.score_weights||{on_time:40,quality:25,attendance:25,initiative:10};
+ const total=Math.round((ontime*w.on_time+qual*w.quality+att*w.attendance+ini*w.initiative)/100);
+ return{total,rows:[["On-time tasks",ontime],["Work quality",qual],["Attendance this month",att],["Thanks & helping",ini]].map(r=>[r[0],Math.round(r[1])]),done:ap}}
+const lvl=x=>Math.floor(x/100)+1;
+
+// ---------- VIEWS ----------
+const V={
+async home(){
+ const[t,a,d]=await Promise.all([sb.from("tasks").select("*").eq("assigned_to",me.id).in("status",["todo","acknowledged","rejected"]).order("due_at").limit(1),sb.from("attendance").select("*").eq("user_id",me.id).eq("day",today()).maybeSingle(),sb.from("team_directory").select("*").order("xp",{ascending:false})]);
+ const k=ok(t)[0],at=ok(a),dir=ok(d),rank=dir.findIndex(x=>x.id==me.id)+1,sc=await score(me.id);me=ok(await sb.from("profiles").select("*").eq("id",me.id).single());
+ return `<div class="card hero"><div class="mut">My score</div><h1>${sc.total} / 100</h1><div class="mut">Level ${lvl(me.xp)} · ${me.xp%100}/100 points · Rank #${rank} of ${dir.length}</div></div>
+ <div class="grid"><button class="big" style="background:#BDE8E1" onclick="tab='att';render()"><span>⏰</span>Attendance</button><button class="big" style="background:#FFE08A" onclick="tab='tasks';render()"><span>✅</span>My Tasks</button><button class="big" style="background:#C9D8FF" onclick="toast('Salary view comes in Phase 2')"><span>💰</span>My Salary</button><button class="big" style="background:#FFD0D5" onclick="tab='me';render()"><span>🆘</span>Help</button></div>
+ <div class="card" style="margin-top:12px"><h2>Today</h2>${at?`✅ Checked in ${new Date(at.check_in).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}${at.late?" (late)":""}`:"⚪ Not checked in yet"}</div>
+ <div class="card"><h2>Next task</h2>${k?`<b>${esc(k.title)}</b><div class="mut">${k.due_at?"⏳ "+new Date(k.due_at).toLocaleString():""} · +${k.points} points</div>`:"All done! 🎉"}</div>`},
+async att(){
+ const at=ok(await sb.from("attendance").select("*").eq("user_id",me.id).eq("day",today()).maybeSingle());
+ return `<h1>Attendance</h1><div class="card" style="text-align:center"><div style="font-size:60px">${at&&!at.check_out?"🟢":"⚪"}</div><h2>${!at?"Not checked in":at.check_out?"Day finished 👋":"You are checked in"}</h2><div class="mut">📍 Your location is saved when you tap</div>${!at?'<button class="btn" onclick="checkIn()">Check in</button>':!at.check_out?'<button class="btn red" onclick="checkOut()">Check out</button>':""}</div>`},
+async tasks(){
+ const T=ok(await sb.from("tasks").select("*").eq("assigned_to",me.id).order("created_at",{ascending:false}).limit(30));
+ return `<h1>My Tasks</h1>`+(T.map(k=>{const todo=["todo","acknowledged","rejected"].includes(k.status);return `<div class="card"><div class="row"><b>${esc(k.title)}</b><span class="tag">${{todo:"🟡 To do",acknowledged:"🟡 To do",rejected:"🔴 Redo",proof_sent:"⏳ Checking",approved:"🟢 Done"}[k.status]}</span></div><div class="mut">${esc(k.details||"")} ${k.due_at?"⏳ "+new Date(k.due_at).toLocaleString():""} · +${k.points}</div>${k.status=="rejected"?`<div class="mut">Manager note: ${esc(k.review_note||"please redo")}</div>`:""}
+ ${todo?(k.proof_type=="none"?`<button class="btn" onclick="doneTask('${k.id}')">Done</button>`:`<label class="btn">📸 Done + photo<input type="file" accept="image/*" capture="environment" hidden onchange="doneTask('${k.id}',this.files[0])"></label>`):""}</div>`}).join("")||'<div class="card">No tasks yet 🎉</div>')},
+async team(){
+ const[d,th]=await Promise.all([sb.from("team_directory").select("*").order("xp",{ascending:false}),sb.from("thanks").select("*").order("created_at",{ascending:false}).limit(8)]);
+ const dir=ok(d),nm=Object.fromEntries(dir.map(x=>[x.id,x.name]));
+ return `<h1>Team</h1><div class="card"><h2>🏆 Points</h2>${dir.map((x,i)=>`<div class="row"><span>${i+1}. ${esc(x.name)}${x.id==me.id?" (you)":""}</span><b>${x.xp}</b></div>`).join("")}</div>
+ <div class="card"><h2>🤝 Say thanks (+5 points for both)</h2><select id="tu">${dir.filter(x=>x.id!=me.id).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select><input id="tm" placeholder="Why? e.g. helped me with boxes"><button class="btn" onclick="sendThanks()">👏 Send thanks</button></div>
+ <div class="card"><h2>⭐ Recent</h2>${ok(th).map(x=>`<div class="row"><span>${esc(nm[x.from_user])} → ${esc(nm[x.to_user])}: ${esc(x.message||"thanks")}</span></div>`).join("")||'<span class="mut">No thanks yet. Be first!</span>'}</div>`},
+async me(){
+ const s=await score(me.id);
+ return `<h1>My score</h1><div class="card hero"><h1>${s.total} / 100</h1><div class="mut">${s.done} tasks approved · Level ${lvl(me.xp)}</div></div><div class="card"><h2>How it is made</h2>${s.rows.map(r=>`<div class="row" style="display:block"><div style="display:flex;justify-content:space-between"><span>${r[0]}</span><b>${r[1]}</b></div>${bar(r[1])}</div>`).join("")}<div class="mut">Scores start high and move as you work.</div></div>
+ <div class="card"><h2>🆘 Help</h2><button class="btn sec" onclick="req('leave')">🌴 Ask for leave</button><button class="btn sec" onclick="req('advance')">💵 Ask for advance</button><button class="btn sec" onclick="req('problem')">⚠️ Report a problem</button><button class="btn sec" onclick="req('idea')">💡 Anonymous idea</button></div>`},
+async today(){
+ const[p,pr,at,ov,sf]=await Promise.all([sb.from("profiles").select("*").eq("status","pending"),sb.from("tasks").select("*").eq("status","proof_sent"),sb.from("attendance").select("id").eq("day",today()),sb.from("tasks").select("id").eq("status","todo").lt("due_at",new Date().toISOString()),sb.from("profiles").select("id,name").eq("status","active")]);
+ const nm=Object.fromEntries(ok(sf).map(x=>[x.id,x.name])),P=ok(pr);
+ const urls=await Promise.all(P.map(k=>k.proof_path?sb.storage.from("proofs").createSignedUrl(k.proof_path,600):null));
+ return `<h1>Today</h1><div class="grid"><div class="card"><div class="mut">Present</div><h1>${ok(at).length}/${ok(sf).length}</h1></div><div class="card"><div class="mut">Overdue</div><h1 style="color:var(--bad)">${ok(ov).length}</h1></div></div>
+ ${me.role=="owner"&&ok(p).length?`<div class="card"><h2>👤 New sign-ups</h2>${ok(p).map(x=>`<div class="row"><span>${esc(x.name)} <span class="mut">${esc(x.phone)}</span></span><button class="btn sm" onclick="setU('${x.id}',{status:'active'})">Approve</button></div>`).join("")}</div>`:""}
+ <div class="card"><h2>✅ Needs your tap (${P.length})</h2>${P.map((k,i)=>`<div class="row" style="display:block"><b>${esc(nm[k.assigned_to])}</b>: ${esc(k.title)}${urls[i]&&urls[i].data?`<img class="p" src="${urls[i].data.signedUrl}">`:""}<div style="margin-top:6px"><button class="btn sm" onclick="review('${k.id}',1)">✅ Approve</button><button class="btn sm red" onclick="review('${k.id}',0)">❌ Redo</button></div></div>`).join("")||'<span class="mut">Nothing waiting 👌</span>'}</div>`},
+async staff(){
+ const S=ok(await sb.from("profiles").select("*").order("name"));
+ return `<h1>Staff</h1>`+S.map(x=>`<div class="card"><div class="row"><b>${esc(x.name)}</b><span class="tag">${x.status}</span></div><div class="mut">📞 ${esc(x.phone)} · ⭐ ${x.xp} · Salary ₹${x.base_salary}</div>${me.role=="owner"?`${x.id!=me.id?`<select onchange="setU('${x.id}',{role:this.value})">${["employee","manager","owner"].map(r=>`<option ${r==x.role?"selected":""}>${r}</option>`).join("")}</select>`:""}<button class="btn sm sec" onclick="setSal('${x.id}')">💰 Set salary</button>${x.id!=me.id?`<button class="btn sm sec" onclick="setU('${x.id}',{status:'${x.status=="active"?"inactive":"active"}'})">${x.status=="active"?"Deactivate":"Activate"}</button>`:""}`:""}</div>`).join("")},
+async assign(){
+ const S=ok(await sb.from("profiles").select("id,name").eq("status","active").order("name"));
+ const T=ok(await sb.from("tasks").select("*").order("created_at",{ascending:false}).limit(8)),nm=Object.fromEntries(S.map(x=>[x.id,x.name]));
+ return `<h1>Assign task</h1><div class="card"><select id="aw">${S.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select><input id="at" placeholder="What to do (be specific)"><input id="ad2" placeholder="Details (optional)"><input id="ae" type="datetime-local"><select id="ap"><option value="photo">Photo proof</option><option value="none">No proof</option></select><input id="ao" type="number" value="10" placeholder="Points"><button class="btn" onclick="assignTask()">Send task</button></div>
+ <div class="card"><h2>Recent tasks</h2>${T.map(k=>`<div class="row"><span>${esc(nm[k.assigned_to]||"")}: ${esc(k.title)}</span><span class="tag">${k.status}</span></div>`).join("")}</div>`}};
+
+// ---------- ACTIONS ----------
+const dist=(a,b,c,d)=>{const r=x=>x*Math.PI/180,h=Math.sin(r(c-a)/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(r(d-b)/2)**2;return 12742000*Math.asin(Math.sqrt(h))};
+const pos=()=>new Promise(r=>navigator.geolocation?navigator.geolocation.getCurrentPosition(p=>r(p.coords),()=>r(null),{timeout:9000,enableHighAccuracy:true}):r(null));
+function checkIn(){run(async()=>{toast("Getting location…");const c=await pos(),g=st.geofence||{};
+ if(g.lat!=null){if(!c)throw{message:"Please allow location"};if(dist(c.latitude,c.longitude,g.lat,g.lng)>g.radius_m)throw{message:"You are not at the workplace"}}
+ const w=st.work_hours||{start:"09:00",late_after_min:10},[h,m]=w.start.split(":"),lim=new Date();lim.setHours(+h,+m+w.late_after_min,0,0);
+ ok(await sb.from("attendance").insert({user_id:me.id,day:today(),in_lat:c&&c.latitude,in_lng:c&&c.longitude,late:new Date()>lim}));toast("✅ Checked in");render()})}
+function checkOut(){run(async()=>{ok(await sb.from("attendance").update({check_out:new Date().toISOString()}).eq("user_id",me.id).eq("day",today()));toast("👋 See you tomorrow");render()})}
+function shrink(f){return new Promise(res=>{const i=new Image();i.onload=()=>{const s=Math.min(1,800/Math.max(i.width,i.height)),c=document.createElement("canvas");c.width=i.width*s;c.height=i.height*s;c.getContext("2d").drawImage(i,0,0,c.width,c.height);c.toBlob(res,"image/jpeg",.6)};i.src=URL.createObjectURL(f)})}
+function doneTask(id,f){run(async()=>{let path=null;
+ if(f){toast("Uploading…");const b=await shrink(f);path=me.id+"/"+id+"-"+Date.now()+".jpg";const u=await sb.storage.from("proofs").upload(path,b,{contentType:"image/jpeg"});if(u.error)throw u.error}
+ ok(await sb.from("tasks").update({status:"proof_sent",proof_path:path}).eq("id",id));toast("🎉 Sent for checking");render()})}
+function sendThanks(){run(async()=>{ok(await sb.from("thanks").insert({to_user:$("#tu").value,message:$("#tm").value}));toast("👏 Thanks sent! +5 points");render()})}
+function req(kind){run(async()=>{const m=prompt({leave:"Which dates and why?",advance:"How much (₹) and why?",problem:"What is the problem?",idea:"Your idea (nobody will see your name)"}[kind]);if(!m)return;
+ ok(await sb.from("requests").insert({kind,message:m,user_id:kind=="idea"?null:me.id}));toast("📨 Sent")})}
+function setU(id,o){run(async()=>{ok(await sb.from("profiles").update(o).eq("id",id));toast("Saved");render()})}
+function setSal(id){const v=prompt("Monthly salary (₹)");if(v!==null&&!isNaN(+v))setU(id,{base_salary:+v})}
+function review(id,yes){run(async()=>{const n=yes?null:prompt("Tell them what to fix");ok(await sb.from("tasks").update({status:yes?"approved":"rejected",review_note:n}).eq("id",id));toast(yes?"✅ Approved, points given":"↩ Sent back");render()})}
+function assignTask(){run(async()=>{const t=$("#at").value.trim();if(!t)throw{message:"Write the task first"};const e=$("#ae").value;
+ ok(await sb.from("tasks").insert({title:t,details:$("#ad2").value,assigned_to:$("#aw").value,due_at:e?new Date(e).toISOString():null,proof_type:$("#ap").value,points:+$("#ao").value||10}));toast("📨 Task sent");render()})}
+// ---------- AUTO-REFRESH ----------
+let chan=null,kt=null;
+const kick=()=>{clearTimeout(kt);kt=setTimeout(()=>{if(me&&me.status=="active")render(true);else if(me)boot()},700)};
+function live(){try{if(chan)sb.removeChannel(chan);chan=sb.channel("tp").on("postgres_changes",{event:"*",schema:"public"},kick).subscribe()}catch(e){}}
+setInterval(()=>{if(me&&me.status!="active"&&!document.hidden)boot()},8000);
+setInterval(()=>{if(me&&me.status=="active"&&!document.hidden)render(true)},20000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&me)kick()});
+window.addEventListener("online",()=>{if(me)kick()});
+sb.auth.onAuthStateChange(()=>{});boot();
+</script></body></html>
